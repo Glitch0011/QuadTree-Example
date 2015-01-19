@@ -3,12 +3,14 @@
 #include <thread>
 #include <string>
 #include <vector>
-#include <gmtl/gmtl.h>
+
 #include <random>
 #include <chrono>
 
-#include <Boid.h>
+#include <gmtl/gmtl.h>
 using namespace gmtl;
+
+#include <Boid.h>
 
 #ifdef DEBUG
 	#define BOID_COUNT 100
