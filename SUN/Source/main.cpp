@@ -184,7 +184,7 @@ int main()
 					if (intersect(targetBox, nearbyBoid->getPos()))
 						nearbyBoids.push_back(nearbyBoid);
 	#else
-			nearbyBoids = quadTree.queryRange(targetBox);
+			nearbyBoids = quadTree.simpleQueryRange(targetBox);
 	#endif
 
 			//Add lines to every nearby boid

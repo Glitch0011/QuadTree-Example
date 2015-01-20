@@ -13,11 +13,13 @@ public:
 	virtual Point3f getPos() = 0;
 };
 
+class QuadTreeTaskScheduler;
 
 class Quadtree
 {
 	//How many boids can be in a quad before it divides
 	const int Capacity = PER_QUAD_CAPACITY;
+	QuadTreeTaskScheduler* scheduler;
 
 public:
 	AABoxf boundary;
@@ -26,9 +28,12 @@ public:
 	std::vector<Quadtree> children;
 	bool hasChildren = false;
 
-	Quadtree(AABoxf boundary)
+	Quadtree(AABoxf boundary);
+
+	Quadtree(AABoxf boundary, QuadTreeTaskScheduler* sce)
 	{
 		this->boundary = boundary;
+		this->scheduler = sce;
 	}
 
 	bool insert(IQuadtreeBoid* vec)
@@ -60,7 +65,6 @@ public:
 
 	void subdivide()
 	{
-		
 		auto perNewPart = (this->boundary.getMax() - this->boundary.getMin()) / DIVISION_FACTOR;
 
 		for (int x = 0; x < DIVISION_FACTOR; x++)
@@ -80,7 +84,7 @@ public:
 						min + Vec3f(
 							perNewPart[0], 
 							perNewPart[1],
-							1)));
+							1)), this->scheduler);
 
 				this->children.push_back(branch);
 			}
@@ -89,14 +93,16 @@ public:
 		this->hasChildren = true;
 	}
 
-	std::vector<IQuadtreeBoid*> queryRange(AABoxf box)
+	std::vector<IQuadtreeBoid*> queryRange(AABoxf box);
+
+	std::vector<IQuadtreeBoid*> simpleQueryRange(AABoxf box)
 	{
 		std::vector<IQuadtreeBoid*> retPoints;
-		this->queryRange(&retPoints, box);
+		this->simpleQueryRange(&retPoints, box);
 		return retPoints;
 	}
 
-	void queryRange(std::vector<IQuadtreeBoid*>* retPoints, AABoxf box)
+	void simpleQueryRange(std::vector<IQuadtreeBoid*>* retPoints, AABoxf box)
 	{
 		//If we intersect with the box
 		if (intersect(this->boundary, box))
@@ -109,7 +115,7 @@ public:
 			//Add our children
 			if (this->hasChildren)
 				for (auto& child : this->children)
-					child.queryRange(retPoints, box);
+					child.simpleQueryRange(retPoints, box);
 		}
 	}
 
