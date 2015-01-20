@@ -23,6 +23,7 @@ using namespace gmtl;
 #define LINE_RANGE 40.0
 #define DRAW_LINES
 //#define LINEAR_SEARCH
+#define PI 3.14159265359
 
 static sf::RectangleShape shape;
 
@@ -107,9 +108,11 @@ int main()
 				mouseDown = false;
 				for (auto b : boids)
 				{
-					b->target = Vec3f(
-						uniform_distribution(generator) * screenSize[0],
-						uniform_distribution(generator) * screenSize[1], 1);
+					auto angle = uniform_distribution(generator) * 2.0f * PI;
+					auto range = (float)(200 + (uniform_distribution(generator) * 1));
+					Vec2f target = Vec2f(screenSize[0] / 2.0f, screenSize[1] / 2.0f) + (Vec2f(sin(angle), cos(angle)) * range);
+
+					b->target = Vec3f(target[0], target[1], 1);
 				}
 			}
 		}
