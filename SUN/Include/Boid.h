@@ -1,24 +1,19 @@
 #pragma once
 
-#include <main.h>
+#include <ScreenSize.h>
 
-struct Boid : IQuadtreeBoid
+struct Boid
 {
+public:
+	Point3f target;
 	Point3f pos;
 	Vec3f velocity;
-	Point3f target;
 
-public:
 	Boid(Point3f pos, Point3f target)
 	{
 		this->pos = pos;
 		this->velocity = Vec3f(0, 0, 0);
 		this->target = target;
-	}
-
-	inline Point3f getPos()
-	{
-		return this->pos;
 	}
 
 	inline void Update(float time)

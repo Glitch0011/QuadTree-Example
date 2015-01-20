@@ -1,45 +1,39 @@
 #pragma once
 
+#include <algorithm>
+
 #include <gmtl/gmtl.h>
 using namespace gmtl;
 
+#include <Boid.h>
+
 #define DIVISION_FACTOR 2.0f
 #define PER_QUAD_CAPACITY 32
-
-class IQuadtreeBoid
-{
-public:
-	virtual ~IQuadtreeBoid() { }
-	virtual Point3f getPos() = 0;
-};
-
-class QuadTreeTaskScheduler;
 
 class Quadtree
 {
 	//How many boids can be in a quad before it divides
 	const int Capacity = PER_QUAD_CAPACITY;
-	QuadTreeTaskScheduler* scheduler;
 
 public:
 	AABoxf boundary;
+	Quadtree* parent;
 
-	std::vector<IQuadtreeBoid*> points;
+	std::vector<Boid*> points;
 	std::vector<Quadtree> children;
 	bool hasChildren = false;
 
-	Quadtree(AABoxf boundary);
-
-	Quadtree(AABoxf boundary, QuadTreeTaskScheduler* sce)
+	Quadtree(AABoxf boundary, Quadtree* parent = nullptr)
 	{
 		this->boundary = boundary;
-		this->scheduler = sce;
+		this->parent = parent;
+		this->points.reserve(Capacity);
 	}
 
-	bool insert(IQuadtreeBoid* vec)
+	bool insert(Boid* vec)
 	{
 		//If it's within our boundary
-		if (intersect(this->boundary, vec->getPos()))
+		if (intersect(this->boundary, vec->pos))
 		{
 			//And we have the space to store it
 			if (points.size() < Capacity)
@@ -84,7 +78,8 @@ public:
 						min + Vec3f(
 							perNewPart[0], 
 							perNewPart[1],
-							1)), this->scheduler);
+							1)),
+							this);
 
 				this->children.push_back(branch);
 			}
@@ -93,30 +88,58 @@ public:
 		this->hasChildren = true;
 	}
 
-	std::vector<IQuadtreeBoid*> queryRange(AABoxf box);
-
-	std::vector<IQuadtreeBoid*> simpleQueryRange(AABoxf box)
+	std::vector<Boid*> queryRange(AABoxf box)
 	{
-		std::vector<IQuadtreeBoid*> retPoints;
-		this->simpleQueryRange(&retPoints, box);
+		std::vector<Boid*> retPoints;
+		this->queryRange(&retPoints, box);
 		return retPoints;
 	}
 
-	void simpleQueryRange(std::vector<IQuadtreeBoid*>* retPoints, AABoxf box)
+	void queryRange(std::vector<Boid*>* retPoints, AABoxf box)
 	{
 		//If we intersect with the box
 		if (intersect(this->boundary, box))
 		{
 			//Add all the points in our quad
-			for (IQuadtreeBoid* point : this->points)
-				if (intersect(box, point->getPos()))
+			for (Boid* point : this->points)
+				if (intersect(box, point->pos))
 					retPoints->push_back(point);
 
 			//Add our children
 			if (this->hasChildren)
 				for (auto& child : this->children)
-					child.simpleQueryRange(retPoints, box);
+					child.queryRange(retPoints, box);
 		}
+	}
+
+	void remove(Boid* boid)
+	{
+		std::vector<Boid*>::iterator position = std::find(this->points.begin(), this->points.end(), boid);
+		if (position != this->points.end())
+			this->points.erase(position);
+	}
+
+	Quadtree* trueParent()
+	{
+		return this->parent != nullptr ? this->parent->trueParent() : this;
+	}
+
+	void update()
+	{
+		std::vector<Boid*> toRemove;
+
+		for (auto& boid : this->points)
+			if (!intersect(this->boundary, boid->pos))		
+				toRemove.push_back(boid);
+
+		for (auto& boid : toRemove)
+		{
+			this->remove(boid);
+			this->trueParent()->insert(boid);
+		}
+
+		for (auto& child : this->children)
+			child.update();
 	}
 
 	void clear()

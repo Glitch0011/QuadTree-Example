@@ -6,6 +6,7 @@
 
 #include <random>
 #include <chrono>
+#include <mutex>
 
 #include <gmtl/gmtl.h>
 using namespace gmtl;
@@ -18,14 +19,23 @@ using namespace gmtl;
 	#define BOID_COUNT 1000
 #endif
 
-#define DRAW_QUADS
+#define UPDATE_FRAMERATE 10
+#define RENDER_FRAMERATE 30
+#define BOID_UPDATE_FRAMERATE 120
+//#define OUTPUT_CONSOLE
+//#define DRAW_QUADS
+//#define DRAW_RECTS
+#define SECONDS_PER_MOUSE_UPDATE 0.25
 #define SECONDS_PER_REBUILD 0.1
 #define LINE_RANGE 40.0
 #define DRAW_LINES
 //#define LINEAR_SEARCH
 #define PI 3.14159265359
+#define UPDATE_BOIDS
 
 static sf::RectangleShape shape;
+
+std::mutex quadTreeMutexLock;
 
 void draw(sf::RenderWindow* window, Quadtree branch)
 {
@@ -44,11 +54,65 @@ void draw(sf::RenderWindow* window, Quadtree branch)
 
 		window->draw(shape);
 	}
-
-	//Draw our children
-	for (Quadtree& child : branch.children)
-		draw(window, child);
+	else
+	{
+		//Draw our children
+		for (Quadtree& child : branch.children)
+			draw(window, child);
+	}
 }
+
+#include <Windows.h>
+
+class FrameLimiter
+{
+private:
+	std::chrono::system_clock::time_point last;
+	double desiredFrameRate = 0;
+	std::chrono::duration<double> timePerFrame;
+
+	unsigned int frameRate = 0;
+	double nextFrameRate = 1.0;
+	
+public:
+	FrameLimiter(double _frameRate = 60.0)
+	{
+		this->desiredFrameRate = _frameRate;
+		timePerFrame = std::chrono::duration<double>(1.0 / desiredFrameRate);
+	}
+
+	double Start()
+	{
+		auto timePassedInSeconds = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now() - last).count() * 1.0e-9;
+		last = std::chrono::system_clock::now();
+
+		if (nextFrameRate <= 0)
+		{
+			nextFrameRate = 1.0;
+
+#ifdef OUTPUT_CONSOLE
+			std::cout << ("Framerate: " + std::to_string(frameRate) + "\r\n").c_str();
+#endif
+
+			frameRate = 0;
+		}
+		else
+		{
+			nextFrameRate -= timePassedInSeconds;
+			frameRate++;
+		}
+
+		return timePassedInSeconds;
+	}
+
+	void End()
+	{
+		std::chrono::duration<double> timePassed = std::chrono::system_clock::now() - last;
+		auto timeToSleep = std::chrono::duration_cast<std::chrono::nanoseconds>(this->timePerFrame - timePassed).count();
+
+		std::this_thread::sleep_for(std::chrono::nanoseconds(timeToSleep));
+	}
+};
 
 int main()
 {
@@ -74,24 +138,84 @@ int main()
 				uniform_distribution(generator) * screenSize[1], 1)));
 	}
 
-	
-	std::chrono::system_clock::time_point last = std::chrono::system_clock::now();
-	unsigned int frameRate = 0;
-	double nextFrameRate = 1.0;
-	double mouseDownLast = 0.5;
-	double lastRebuild = SECONDS_PER_REBUILD;
 	bool mouseDown = false;
 
 	Quadtree quadTree(AABoxf(Vec3f(0, 0, 0), Vec3f(screenSize[0], screenSize[1], 1)));
 	for (Boid* _b : boids)
 		quadTree.insert(_b);
 
+	auto boidUpdateThread = std::thread([&]
+	{
+		FrameLimiter boidUpdateLimiter(BOID_UPDATE_FRAMERATE);
+		while (window->isOpen())
+		{
+			auto timePassedInSeconds = boidUpdateLimiter.Start();
+
+#ifdef UPDATE_BOIDS
+			for (auto boid : boids)
+				boid->Update(timePassedInSeconds);
+#endif
+
+			boidUpdateLimiter.End();
+		}
+	});
+
+	auto quadRebuilderThread = std::thread([&]
+	{
+		FrameLimiter updateLimiter(UPDATE_FRAMERATE);
+		double mouseDownLast = 0.5;
+		double lastRebuild = SECONDS_PER_REBUILD;
+		
+		while (window->isOpen())
+		{
+			//Frame-rate control
+			auto timePassedInSeconds = updateLimiter.Start();
+
+			//If the mouse is down, tell the boids to go to that position
+			if (mouseDown)
+			{
+				if (mouseDownLast <= 0)
+				{
+					auto mouse = sf::Mouse::getPosition(*window);
+					for (auto b : boids)
+						b->target = Vec3f(mouse.x, mouse.y, 1);
+					mouseDownLast = SECONDS_PER_MOUSE_UPDATE;
+				}
+				else
+					mouseDownLast -= timePassedInSeconds;
+			}
+
+			//Rebuild the quad-tree every SECONDS_PER_REBUILD
+			if (lastRebuild <= 0)
+			{
+				quadTreeMutexLock.lock();
+				{
+					//quadTree.update();
+
+					quadTree.clear();
+
+					for (Boid* _b : boids)
+						quadTree.insert(_b);
+				}
+				quadTreeMutexLock.unlock();
+
+				lastRebuild = SECONDS_PER_REBUILD;
+			}
+			else
+			{
+				lastRebuild -= timePassedInSeconds;
+			}
+
+			updateLimiter.End();
+		}
+		return 0;
+	});
+
+	FrameLimiter renderLimiter(RENDER_FRAMERATE);
+
 	while (window->isOpen())
 	{
-		//Frame-rate control
-		auto timePassedInSeconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
-			std::chrono::system_clock::now() - last).count() * 1.0e-9;
-		last = std::chrono::system_clock::now();
+		renderLimiter.Start();
 
 		//Process events
 		sf::Event event;
@@ -116,43 +240,15 @@ int main()
 				}
 			}
 		}
-
-		//If the mouse is down, tell the boids to go to that position
-		if (mouseDown)
-		{
-			if (mouseDownLast <= 0)
-			{
-				auto mouse = sf::Mouse::getPosition(*window);
-				auto mouse_v = Vec3f(mouse.x, mouse.y, 1);
-				for (auto b : boids)
-					b->target = mouse_v;
-				mouseDownLast = 0.5f;
-			}
-			else
-				mouseDownLast -= timePassedInSeconds;
-		}
-
+		
 		//Clear the screen
 		window->clear();
 
-		//Rebuild the quad-tree every SECONDS_PER_REBUILD
-		if (lastRebuild <= 0)
-		{
-			quadTree.clear();
-
-			for (Boid* _b : boids)
-				quadTree.insert(_b);
-
-			lastRebuild = SECONDS_PER_REBUILD;
-		}
-		else
-		{
-			lastRebuild -= timePassedInSeconds;
-		}
-
 		//Draw the quad-tree using recursion
 #ifdef DRAW_QUADS
+		quadTreeMutexLock.lock();
 		draw(window, quadTree);
+		quadTreeMutexLock.unlock();
 #endif
 
 		//Draw boids
@@ -166,72 +262,58 @@ int main()
 		sf::Vertex v;
 #endif
 
-		for (Boid* child : boids)
+		quadTreeMutexLock.lock();
+		for (Boid* boid : boids)
 		{
-			shape.setPosition(sf::Vector2f(child->getPos()[0], child->getPos()[1]));
+			shape.setPosition(sf::Vector2f(boid->pos[0], boid->pos[1]));
 
 			auto targetBox = AABoxf(
-				Vec3f(child->getPos()[0] - LINE_RANGE, child->getPos()[1] - LINE_RANGE, 0),
-				Vec3f(child->getPos()[0] + LINE_RANGE, child->getPos()[1] + LINE_RANGE, 1));
+				Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
+				Vec3f(boid->pos[0] + LINE_RANGE, boid->pos[1] + LINE_RANGE, 1));
 
 #ifdef DRAW_LINES
 			//Find all boids nearby the first boid
-			std::vector<IQuadtreeBoid*> nearbyBoids;
+			std::vector<Boid*> nearbyBoids;
 
 	#ifdef LINEAR_SEARCH
 			for (Boid* nearbyBoid : boids)
 				if (nearbyBoid != child)
-					if (intersect(targetBox, nearbyBoid->getPos()))
+					if (intersect(targetBox, nearbyBoid->pos))
 						nearbyBoids.push_back(nearbyBoid);
 	#else
 			nearbyBoids = quadTree.simpleQueryRange(targetBox);
 	#endif
 
 			//Add lines to every nearby boid
+			v.color = sf::Color::White;
+			v.color.a = 25.50f;
 			for (auto nearbyBoid : nearbyBoids)
 			{
-				auto pos = child->getPos();
-				v.position = sf::Vector2f(pos[0], pos[1]);
-				v.color = sf::Color::White;
-				v.color.a = 25.50f;
+				v.position = sf::Vector2f(boid->pos[0], boid->pos[1]);
 				verticies.push_back(v);
 
-				pos = nearbyBoid->getPos();
-				v.position = sf::Vector2f(pos[0], pos[1]);
+				v.position = sf::Vector2f(nearbyBoid->pos[0], nearbyBoid->pos[1]);
 				verticies.push_back(v);
 			}
 #endif
 
+#ifdef DRAW_RECTS
 			window->draw(shape);
+#endif
 		}
+		quadTreeMutexLock.unlock();
 
 #ifdef DRAW_LINES
 		window->draw(verticies.data(), verticies.size(), sf::PrimitiveType::Lines);
 #endif
 
-		//Update boids
-		for (auto b : boids)
-			b->Update(timePassedInSeconds);
-		
-		//Frame-rate controls
-		if (nextFrameRate <= 0)
-		{
-			nextFrameRate = 1.0;
-
-			window->setTitle(
-				sf::String(("Framerate: " + std::to_string(frameRate))
-				.c_str()));
-
-			frameRate = 0;
-		}
-		else
-		{
-			nextFrameRate -= timePassedInSeconds;
-			frameRate++;
-		}
-		
 		window->display();
+
+		renderLimiter.End();
 	}
+
+	quadRebuilderThread.join();
+	boidUpdateThread.join();
 
 	for (auto boid : boids)
 		delete boid;

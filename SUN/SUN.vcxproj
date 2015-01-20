@@ -88,20 +88,14 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Source\AutoResetEvent.cpp" />
     <ClCompile Include="Source\main.cpp" />
-    <ClCompile Include="Source\QuadTree.cpp" />
-    <ClCompile Include="Source\QuadTreeTaskScheduler.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Include\AutoResetEvent.h" />
-    <ClInclude Include="Include\BlockingQueue.h" />
     <ClInclude Include="Include\Boid.h" />
-    <ClInclude Include="Include\CounterResetEvent.h" />
     <ClInclude Include="Include\CustomAllocator.h" />
     <ClInclude Include="Include\main.h" />
     <ClInclude Include="Include\Quadtree.h" />
-    <ClInclude Include="Include\QuadTreeTaskScheduler.h" />
+    <ClInclude Include="Include\ScreenSize.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE" />
