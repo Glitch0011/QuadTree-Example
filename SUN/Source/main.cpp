@@ -155,10 +155,6 @@ int main()
 		draw(window, quadTree);
 #endif
 
-		auto targetBox = AABoxf(
-			Vec3f(boids[0]->getPos()[0] - 50, boids[0]->getPos()[1] - 50, 0),
-			Vec3f(boids[0]->getPos()[0] + 50, boids[0]->getPos()[1] + 50, 1));
-
 		//Draw boids
 		shape.setOutlineThickness(1);
 		shape.setSize(sf::Vector2f(2, 2));
@@ -194,12 +190,14 @@ int main()
 			//Add lines to every nearby boid
 			for (auto nearbyBoid : nearbyBoids)
 			{
-				v.position = sf::Vector2f(child->getPos()[0], child->getPos()[1]);
+				auto pos = child->getPos();
+				v.position = sf::Vector2f(pos[0], pos[1]);
 				v.color = sf::Color::White;
-				v.color.a = 255.0 / 10.0f;
+				v.color.a = 25.50f;
 				verticies.push_back(v);
 
-				v.position = sf::Vector2f(nearbyBoid->getPos()[0], nearbyBoid->getPos()[1]);
+				pos = nearbyBoid->getPos();
+				v.position = sf::Vector2f(pos[0], pos[1]);
 				verticies.push_back(v);
 			}
 #endif
