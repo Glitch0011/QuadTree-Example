@@ -11,6 +11,8 @@ public:
 	double density;
 	double mass = 1.0;
 
+	Vec3f accel;
+	Vec3f normal;
 	Point3f pos;
 	Vec3f velocity;
 	Vec3f nextPos;

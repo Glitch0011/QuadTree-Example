@@ -121,7 +121,19 @@ public:
 	}
 };
 
-static double h = 4000.0;
+static double h = 5.0;
+#define GAS_STIFFNESS 3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
+#define REST_DENSITY 998.29 // kg/m^3 is rest density of water particle
+#define PARTICLE_MASS 0.02 // kg
+#define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
+#define SURFACE_TENSION 0.0728 // N/m 
+#define SURFACE_THRESHOLD 7.065
+#define KERNEL_PARTICLES 20.0
+#define GRAVITY_ACCELERATION 9.80665
+
+#define WALL_K 10 //10000.0 // wall spring constant
+#define WALL_DAMPING -0.9 // wall damping constant
+#define BOX_SIZE 0.4
 
 double W(Vec3f ij)
 {
@@ -133,20 +145,181 @@ double W(Vec3f ij)
 	return q;
 }
 
-void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* quadTree)
+double Wpoly6(double radiusSquared)
+{
+	static double coefficient = 315.0 / (64.0*PI*pow(h, 9));
+	static double hSquared = h*h;
+
+	return coefficient * pow(hSquared - radiusSquared, 3);
+}
+
+void Wpoly6Gradient(Vec3f& diffPosition, double radiusSquared, Vec3f& gradient)
+{
+	static double coefficient = -945.0 / (32.0*PI*pow(h, 9));
+	static double hSquared = h*h;
+
+	gradient = (float)(coefficient * pow(hSquared - radiusSquared, 2)) * diffPosition;
+}
+
+double Wpoly6Laplacian(double radiusSquared)
+{
+
+	static double coefficient = -945.0 / (32.0*PI*pow(h, 9));
+	static double hSquared = h*h;
+
+	return coefficient * (hSquared - radiusSquared) * (3.0*hSquared - 7.0*radiusSquared);
+}
+
+void WspikyGradient(Vec3f& diffPosition, double radiusSquared, Vec3f& gradient)
+{
+
+	static double coefficient = -45.0 / (PI*pow(h, 6));
+
+	double radius = sqrt(radiusSquared);
+
+	gradient = (float)(coefficient * pow(h - radius, 2)) * diffPosition / (float)radius;
+}
+
+
+double WviscosityLaplacian(double radiusSquared)
+{
+	static double coefficient = 45.0 / (PI*pow(h, 6));
+
+	double radius = sqrt(radiusSquared);
+
+	return coefficient * (h - radius);
+}
+
+void collisionForce(Boid* boid, Vec3f f_collision)
+{
+	struct WALL
+	{
+	public:
+		Vec3f point;
+		Vec3f normal;
+		WALL(Vec3f normal, Vec3f position){
+			this->point = position; this->normal = normal;
+		}
+	};
+
+	std::vector<WALL> _walls;
+	/*_walls.push_back(WALL(Vec3f(0, 0, 1), Vec3f(0, 0, 0)));
+	_walls.push_back(WALL(Vec3f(0, 0, -1), Vec3f(0, 0, 0)));*/
+	_walls.push_back(WALL(Vec3f(1, 0, 0), Vec3f(0, 0, 0)));     // left
+	_walls.push_back(WALL(Vec3f(-1, 0, 0), Vec3f(screenSize[0], 0, 0)));     // right
+	_walls.push_back(WALL(Vec3f(0, -1, 0), Vec3f(0, screenSize[1] - 300, 0))); // bottom
+
+	for (auto& wall : _walls)
+	{
+		float d = dot(wall.point - boid->pos, wall.normal) + 0.01; // particle radius
+
+		if (d > 0.0)
+		{
+			boid->accel += (float)WALL_K * wall.normal * d;
+			boid->accel += (float)WALL_DAMPING * dot(boid->velocity, wall.normal) * wall.normal;
+		}
+	}
+}
+
+void updateAccel(std::vector<Boid*>& boids, float timePassedInSeconds, Quadtree* quadTree)
+{
+	//Update density and pressure
+	for (auto& boid : boids)
+	{
+		boid->density = 0;
+
+		for (auto& otherBoid : boids)
+		{
+			Vec3f diffPos = boid->pos - otherBoid->pos;
+			auto radSqr = lengthSquared(diffPos);
+			if (radSqr < h*h)
+				boid->density += Wpoly6(radSqr);
+		}
+
+		boid->density *= boid->mass;
+
+		boid->pressure = GAS_STIFFNESS * (boid->density - REST_DENSITY);
+	}
+
+	for (auto& boid : boids)
+	{
+		Vec3f f_pressure, f_viscosity, f_surface, f_gravity(0.0, boid->density*GRAVITY_ACCELERATION, 0.0), n, colorFieldNormal;
+		double colorFieldLaplacian = 0;
+
+		for (auto& otherBoid : boids)
+		{
+			Vec3f diffPos = boid->pos - otherBoid->pos;
+			double radiusSquared = lengthSquared(diffPos);
+
+			if (radiusSquared <= h*h)
+			{
+				if (radiusSquared > 0.0)
+				{
+					Vec3f gradient;
+					Wpoly6Gradient(diffPos, radiusSquared, gradient);
+
+					float a = boid->pressure + otherBoid->pressure;
+					float b = 2.0 * otherBoid->density;
+					f_pressure += a / b * gradient;
+
+					colorFieldNormal += gradient / (float)otherBoid->density;
+				}
+
+				f_viscosity += (otherBoid->velocity - boid->velocity) * (float)WviscosityLaplacian(radiusSquared) / (float)otherBoid->density;
+
+				colorFieldLaplacian += Wpoly6Laplacian(radiusSquared) / (float)otherBoid->density;
+			}
+		}
+
+		f_pressure *= -boid->mass;
+
+		f_viscosity *= VISCOSITY * boid->mass;
+
+		colorFieldNormal *= boid->mass;
+
+		boid->normal = -1.0f * colorFieldNormal;
+
+		colorFieldLaplacian *= boid->mass;
+
+		//Surface tension
+		double colorFieldNormalMagnitude = length(colorFieldNormal);
+		if (colorFieldNormalMagnitude != 0)
+		{
+			if (colorFieldNormalMagnitude < SURFACE_THRESHOLD)
+			{
+				f_surface = (float)-SURFACE_TENSION * (float)colorFieldLaplacian * colorFieldNormal / (float)colorFieldNormalMagnitude;
+			}
+		}
+
+		boid->accel = (f_pressure + f_viscosity + f_surface + f_gravity) / (float)(boid->density == 0 ? 1 : boid->density);
+
+		Vec3f f_collision;
+		collisionForce(boid, f_collision);
+	}
+}
+
+void updateBoids(std::vector<Boid*>& boids, float timePassedInSeconds, Quadtree* quadTree)
 {
 	if (timePassedInSeconds < 0.001 || timePassedInSeconds > 1)
 		return;
+
+	updateAccel(boids, timePassedInSeconds, quadTree);
 
 	Vec3f gravity = Vec3f(0, 1, 0);
 
 	for (auto& boid : boids)
 	{
-		boid->velocity += gravity;
-		boid->nextPos = boid->pos + (boid->velocity * timePassedInSeconds);
+		auto newPos = boid->pos + boid->velocity * timePassedInSeconds + boid->accel*timePassedInSeconds*timePassedInSeconds;
+		auto newVel = (newPos - boid->pos) / timePassedInSeconds;
+
+		boid->pos = newPos;
+		boid->velocity = newVel;
+
+		//boid->velocity += gravity;
+		//boid->nextPos = boid->pos + (boid->velocity * timePassedInSeconds);
 	}
 
-	for (auto& boid : boids)
+	/*for (auto& boid : boids)
 	{
 		//Collisions
 		auto targetBox = AABoxf(
@@ -188,7 +361,7 @@ void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* 
 	{
 		boid->pos = boid->nextPos;
 		boid->velocity *= 0.998f;
-	}
+	}*/
 }
 
 int main()
