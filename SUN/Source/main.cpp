@@ -21,14 +21,14 @@ using namespace gmtl;
 
 #define UPDATE_FRAMERATE 10
 #define RENDER_FRAMERATE 30
-#define BOID_UPDATE_FRAMERATE 120
-//#define OUTPUT_CONSOLE
-//#define DRAW_QUADS
-//#define DRAW_RECTS
+#define BOID_UPDATE_FRAMERATE 140
+#define OUTPUT_CONSOLE
+#define DRAW_QUADS
+#define DRAW_RECTS
 #define SECONDS_PER_MOUSE_UPDATE 0.25
 #define SECONDS_PER_REBUILD 0.1
 #define LINE_RANGE 40.0
-#define DRAW_LINES
+//#define DRAW_LINES
 //#define LINEAR_SEARCH
 #define PI 3.14159265359
 #define UPDATE_BOIDS
@@ -73,12 +73,15 @@ private:
 
 	unsigned int frameRate = 0;
 	double nextFrameRate = 1.0;
+
+	bool output = false;
 	
 public:
-	FrameLimiter(double _frameRate = 60.0)
+	FrameLimiter(double _frameRate = 60.0, bool output = false)
 	{
 		this->desiredFrameRate = _frameRate;
 		timePerFrame = std::chrono::duration<double>(1.0 / desiredFrameRate);
+		this->output = output;
 	}
 
 	double Start()
@@ -91,6 +94,7 @@ public:
 			nextFrameRate = 1.0;
 
 #ifdef OUTPUT_CONSOLE
+			if (output)
 			std::cout << ("Framerate: " + std::to_string(frameRate) + "\r\n").c_str();
 #endif
 
@@ -124,6 +128,8 @@ int main()
 	std::normal_distribution<double> distribution(5.0, 1.0);
 	std::uniform_real_distribution<double> uniform_distribution(0, 1.0);
 
+	Quadtree quadTree(AABoxf(Vec3f(0, 0, 0), Vec3f(screenSize[0], screenSize[1], 1)));
+
 	//Setup boids
 	std::vector<Boid*> boids;
 	for (int i = 0; i < BOID_COUNT; ++i)
@@ -135,25 +141,29 @@ int main()
 				(distribution(generator) / 10) * screenSize[1], 1),
 			Vec3f(
 				uniform_distribution(generator) * screenSize[0],
-				uniform_distribution(generator) * screenSize[1], 1)));
+				uniform_distribution(generator) * screenSize[1], 1),
+			&quadTree));
 	}
 
 	bool mouseDown = false;
 
-	Quadtree quadTree(AABoxf(Vec3f(0, 0, 0), Vec3f(screenSize[0], screenSize[1], 1)));
 	for (Boid* _b : boids)
 		quadTree.insert(_b);
 
 	auto boidUpdateThread = std::thread([&]
 	{
-		FrameLimiter boidUpdateLimiter(BOID_UPDATE_FRAMERATE);
+		FrameLimiter boidUpdateLimiter(BOID_UPDATE_FRAMERATE, true);
 		while (window->isOpen())
 		{
 			auto timePassedInSeconds = boidUpdateLimiter.Start();
 
 #ifdef UPDATE_BOIDS
-			for (auto boid : boids)
-				boid->Update(timePassedInSeconds);
+			quadTreeMutexLock.lock();
+			{
+				for (auto boid : boids)
+					boid->Update(timePassedInSeconds);
+			}
+			quadTreeMutexLock.unlock();
 #endif
 
 			boidUpdateLimiter.End();
@@ -253,7 +263,7 @@ int main()
 
 		//Draw boids
 		shape.setOutlineThickness(1);
-		shape.setSize(sf::Vector2f(2, 2));
+		shape.setSize(sf::Vector2f(10, 10));
 		shape.setOutlineColor(sf::Color::White);
 		shape.setFillColor(sf::Color::Transparent);
 
