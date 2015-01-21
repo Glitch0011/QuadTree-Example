@@ -11,12 +11,14 @@
 #include <gmtl/gmtl.h>
 using namespace gmtl;
 
+#include <conio.h>
+
 #include <Boid.h>
 
 #ifdef DEBUG
 	#define BOID_COUNT 100
 #else
-	#define BOID_COUNT 1000
+	#define BOID_COUNT 500
 #endif
 
 #define UPDATE_FRAMERATE 10
@@ -27,13 +29,14 @@ using namespace gmtl;
 #define DRAW_RECTS
 #define SECONDS_PER_MOUSE_UPDATE 0.25
 #define SECONDS_PER_REBUILD 0.1
-#define LINE_RANGE 40.0
+#define LINE_RANGE 30.0
 //#define DRAW_LINES
 //#define LINEAR_SEARCH
 #define PI 3.14159265359
 #define UPDATE_BOIDS
 
 static sf::RectangleShape shape;
+static sf::CircleShape circleShape;
 
 std::mutex quadTreeMutexLock;
 
@@ -118,6 +121,123 @@ public:
 	}
 };
 
+static double h = 4000.0;
+
+double W(Vec3f ij)
+{
+	auto q = length(ij) / h;
+	if (q >= 0 || q <= 2)
+		q = (2.0 / 3.0) - (9.0 / 8.0)*pow(q, 2) + (19.0 / 24.0)*pow(q, 3) - (5.0 / 32.0)*pow(q, 4);
+	else
+		q = 0;
+	return q;
+}
+
+void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* quadTree)
+{
+	if (timePassedInSeconds < 0.001 || timePassedInSeconds > 1)
+		return;
+
+	Vec3f gravity = Vec3f(0, 1, 0);
+
+	for (auto& boid : boids)
+	{
+		boid->velocity += gravity;
+		boid->nextPos = boid->pos + (boid->velocity * timePassedInSeconds);
+	}
+
+	for (auto& boid : boids)
+	{
+		auto targetBox = AABoxf(
+			Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
+			Vec3f(boid->pos[0] + LINE_RANGE, boid->pos[1] + LINE_RANGE, 1));
+
+		auto otherBoids = quadTree->queryRange(targetBox);
+
+		for (auto& otherBoid : otherBoids)
+		{
+			if (otherBoid == boid)
+				continue;
+
+			auto l = length((Vec3f)(boid->nextPos - otherBoid->nextPos));
+			if (l < 20)
+			{
+				Vec3f vector = (boid->nextPos - otherBoid->nextPos);
+				normalize(vector);
+				boid->velocity += vector * l*2.0f;
+			}
+
+		} 
+
+		//Work out floor collisions
+		auto floorDiff = (screenSize[1] - 50) - boid->nextPos[1];
+		if (floorDiff < 0)
+			boid->velocity += Vec3f(0, floorDiff, 0);
+
+		floorDiff = boid->nextPos[0] - 50;
+		if (floorDiff < 0)
+			boid->velocity += Vec3f(-floorDiff, 0, 0);
+
+		floorDiff = (screenSize[0] - 50) - boid->nextPos[0];
+		if (floorDiff < 0)
+			boid->velocity += Vec3f(floorDiff, 0, 0);
+
+		boid->pressure = 0;
+		boid->density = 0;
+
+		double totalDensity = 0;
+		//Approximation of density
+		for (auto& otherBoid : otherBoids)
+		{
+			if (otherBoid == boid)
+				continue;
+
+			totalDensity += (float)(otherBoid->mass / otherBoid->density) * (Vec3f)(boid->velocity - otherBoid->velocity) * (float)W(boid->pos - otherBoid->pos);
+			//auto w = W(boid->pos - otherBoid->pos);
+			//boid->density += otherBoid->mass * w;
+		}
+
+		boid->density *= totalDensity;
+	}
+
+	for (auto& boid : boids)
+	{
+		auto targetBox = AABoxf(
+			Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
+			Vec3f(boid->pos[0] + LINE_RANGE, boid->pos[1] + LINE_RANGE, 1));
+
+		auto otherBoids = quadTree->queryRange(targetBox);
+
+		//Correct velocity
+		Vec3f totalVelocity;
+		for (auto& otherBoid : otherBoids)
+		{
+			if (otherBoid == boid)
+				continue;
+
+			float left = (2 * otherBoid->mass) / (boid->density + otherBoid->density);
+			Vec3f middle = (boid->velocity - otherBoid->velocity);
+			float q = W(boid->pos - otherBoid->pos);
+
+			auto right = (float)(315 / 208 * PI * pow(h, 3)) * (q);
+			totalVelocity += left * middle * q;
+		}
+		if (otherBoids.size() > 0)
+		{
+			totalVelocity /= otherBoids.size();
+			boid->velocity += totalVelocity;
+		}
+
+		boid->nextPos = boid->pos + (boid->velocity * timePassedInSeconds);
+	}
+
+	for (auto& boid : boids)
+	{
+		boid->pos = boid->nextPos;
+		boid->velocity *= 0.998f;
+	}
+}
+
 int main()
 {
 	//Setup window
@@ -132,17 +252,12 @@ int main()
 
 	//Setup boids
 	std::vector<Boid*> boids;
-	for (int i = 0; i < BOID_COUNT; ++i)
+	for (auto x = 0; x < sqrt(BOID_COUNT); x++)
 	{
-		boids.push_back(
-			new Boid(
-			Point3f(
-				(distribution(generator) / 10) * screenSize[0],
-				(distribution(generator) / 10) * screenSize[1], 1),
-			Vec3f(
-				uniform_distribution(generator) * screenSize[0],
-				uniform_distribution(generator) * screenSize[1], 1),
-			&quadTree));
+		for (auto y = 0; y < sqrt(BOID_COUNT); y++)
+		{
+			boids.push_back(new Boid(Point3f(50,50, 0) + Point3f(x * 20, y * 20, 1)));
+		}
 	}
 
 	bool mouseDown = false;
@@ -160,10 +275,10 @@ int main()
 #ifdef UPDATE_BOIDS
 			quadTreeMutexLock.lock();
 			{
-				for (auto boid : boids)
-					boid->Update(timePassedInSeconds);
+				updateBoids(boids, timePassedInSeconds, &quadTree);
 			}
 			quadTreeMutexLock.unlock();
+
 #endif
 
 			boidUpdateLimiter.End();
@@ -187,8 +302,8 @@ int main()
 				if (mouseDownLast <= 0)
 				{
 					auto mouse = sf::Mouse::getPosition(*window);
-					for (auto b : boids)
-						b->target = Vec3f(mouse.x, mouse.y, 1);
+					/*for (auto b : boids)
+						b->target = Vec3f(mouse.x, mouse.y, 1);*/
 					mouseDownLast = SECONDS_PER_MOUSE_UPDATE;
 				}
 				else
@@ -246,8 +361,13 @@ int main()
 					auto range = (float)(200 + (uniform_distribution(generator) * 1));
 					Vec2f target = Vec2f(screenSize[0] / 2.0f, screenSize[1] / 2.0f) + (Vec2f(sin(angle), cos(angle)) * range);
 
-					b->target = Vec3f(target[0], target[1], 1);
+					//b->target = Vec3f(target[0], target[1], 1);
 				}
+
+				quadTreeMutexLock.lock();
+				auto mousePos = sf::Mouse::getPosition(*window);
+				boids.push_back(new Boid(Point3f(mousePos.x, mousePos.y, 1)));
+				quadTreeMutexLock.unlock();
 			}
 		}
 		
@@ -262,10 +382,10 @@ int main()
 #endif
 
 		//Draw boids
-		shape.setOutlineThickness(1);
-		shape.setSize(sf::Vector2f(10, 10));
-		shape.setOutlineColor(sf::Color::White);
-		shape.setFillColor(sf::Color::Transparent);
+		circleShape.setOutlineThickness(1);
+		circleShape.setRadius(10.0f);
+		circleShape.setOutlineColor(sf::Color::White);
+		circleShape.setFillColor(sf::Color::Transparent);
 
 #ifdef DRAW_LINES
 		std::vector<sf::Vertex> verticies;
@@ -275,7 +395,7 @@ int main()
 		quadTreeMutexLock.lock();
 		for (Boid* boid : boids)
 		{
-			shape.setPosition(sf::Vector2f(boid->pos[0], boid->pos[1]));
+			circleShape.setPosition(sf::Vector2f(boid->pos[0], boid->pos[1]));
 
 			auto targetBox = AABoxf(
 				Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
@@ -308,7 +428,7 @@ int main()
 #endif
 
 #ifdef DRAW_RECTS
-			window->draw(shape);
+			window->draw(circleShape);
 #endif
 		}
 		quadTreeMutexLock.unlock();

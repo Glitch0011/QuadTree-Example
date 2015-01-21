@@ -7,17 +7,21 @@ class Quadtree;
 struct Boid
 {
 public:
-	Point3f target;
+	double pressure;
+	double density;
+	double mass = 1.0;
+
 	Point3f pos;
 	Vec3f velocity;
-	Quadtree* quadTree;
+	Vec3f nextPos;
 
-	Boid(Point3f pos, Point3f target, Quadtree* quadTree)
+	Boid(Point3f pos)
 	{
 		this->pos = pos;
 		this->velocity = Vec3f(0, 0, 0);
-		this->target = target;
-		this->quadTree = quadTree;
+		this->density = 0;
+		this->pressure = 0;
+		
 	}
 
 	void Update(float time);
