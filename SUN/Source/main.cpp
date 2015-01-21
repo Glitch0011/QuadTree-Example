@@ -148,6 +148,7 @@ void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* 
 
 	for (auto& boid : boids)
 	{
+		//Collisions
 		auto targetBox = AABoxf(
 			Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
 			Vec3f(boid->pos[0] + LINE_RANGE, boid->pos[1] + LINE_RANGE, 1));
@@ -167,7 +168,7 @@ void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* 
 				boid->velocity += vector * l*2.0f;
 			}
 
-		} 
+		}
 
 		//Work out floor collisions
 		auto floorDiff = (screenSize[1] - 50) - boid->nextPos[1];
@@ -181,54 +182,6 @@ void updateBoids(std::vector<Boid*> boids, float timePassedInSeconds, Quadtree* 
 		floorDiff = (screenSize[0] - 50) - boid->nextPos[0];
 		if (floorDiff < 0)
 			boid->velocity += Vec3f(floorDiff, 0, 0);
-
-		boid->pressure = 0;
-		boid->density = 0;
-
-		double totalDensity = 0;
-		//Approximation of density
-		for (auto& otherBoid : otherBoids)
-		{
-			if (otherBoid == boid)
-				continue;
-
-			totalDensity += (float)(otherBoid->mass / otherBoid->density) * (Vec3f)(boid->velocity - otherBoid->velocity) * (float)W(boid->pos - otherBoid->pos);
-			//auto w = W(boid->pos - otherBoid->pos);
-			//boid->density += otherBoid->mass * w;
-		}
-
-		boid->density *= totalDensity;
-	}
-
-	for (auto& boid : boids)
-	{
-		auto targetBox = AABoxf(
-			Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),
-			Vec3f(boid->pos[0] + LINE_RANGE, boid->pos[1] + LINE_RANGE, 1));
-
-		auto otherBoids = quadTree->queryRange(targetBox);
-
-		//Correct velocity
-		Vec3f totalVelocity;
-		for (auto& otherBoid : otherBoids)
-		{
-			if (otherBoid == boid)
-				continue;
-
-			float left = (2 * otherBoid->mass) / (boid->density + otherBoid->density);
-			Vec3f middle = (boid->velocity - otherBoid->velocity);
-			float q = W(boid->pos - otherBoid->pos);
-
-			auto right = (float)(315 / 208 * PI * pow(h, 3)) * (q);
-			totalVelocity += left * middle * q;
-		}
-		if (otherBoids.size() > 0)
-		{
-			totalVelocity /= otherBoids.size();
-			boid->velocity += totalVelocity;
-		}
-
-		boid->nextPos = boid->pos + (boid->velocity * timePassedInSeconds);
 	}
 
 	for (auto& boid : boids)
