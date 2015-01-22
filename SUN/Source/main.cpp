@@ -18,7 +18,7 @@ using namespace gmtl;
 #ifdef DEBUG
 	#define BOID_COUNT 10
 #else
-	#define BOID_COUNT 700
+	#define BOID_COUNT 500
 #endif
 
 #define UPDATE_FRAMERATE 60
@@ -142,7 +142,6 @@ static double h = 0.035;//0.0457;
 //Lower = less compression
 #define REST_DENSITY 998.29 //998.29 // kg/m^3 is rest density of water particle
 
-
 #define PARTICLE_MASS 0.02 // kg
 
 //Higher = gloopier
@@ -258,19 +257,6 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 	{
 		boid->density = 0;
 
-		/*std::vector<Boid*> bb;
-		for (auto& otherBoid : boids)
-		{
-			auto radSqr = lengthSquared((Vec3d)(boid->pos - otherBoid->pos));
-			if (radSqr < h * h)
-				bb.push_back(otherBoid);
-		}
-
-		auto aa = quadTree->queryRange(AABoxd(Point3d(boid->pos[0] - hh, boid->pos[1] - hh, 0), Point3d(boid->pos[1] + hh, boid->pos[1] + hh, 1)));
-		if (bb.size() > aa.size())
-			std::cout << "test";*/
-		
-
 		for (auto& otherBoid : boids)
 		{
 			auto radSqr = lengthSquared((Vec3d)(boid->pos - otherBoid->pos));
@@ -328,7 +314,6 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 		
 		if (colorFieldNormalMagnitude > SURFACE_THRESHOLD)
 		{
-			//f_surface = -SURFACE_TENSION * colorFieldLaplacian * colorFieldNormal / colorFieldNormalMagnitude;
 			f_surface = -SURFACE_TENSION * colorFieldNormal / colorFieldNormalMagnitude * colorFieldLaplacian;
 		}
 
