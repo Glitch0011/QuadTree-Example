@@ -30,10 +30,15 @@ using namespace gmtl;
 #define SECONDS_PER_MOUSE_UPDATE 0.1
 #define SECONDS_PER_REBUILD 0.1
 #define LINE_RANGE 30.0
+//#define RENDER_REAL
 //#define DRAW_LINES
 //#define LINEAR_SEARCH
 #define PI 3.14159265359
 #define UPDATE_BOIDS
+
+#ifdef RENDER_REAL
+	#undef DRAW_QUADS
+#endif
 
 static sf::RectangleShape shape;
 static sf::CircleShape circleShape;
@@ -128,18 +133,33 @@ public:
 	}
 };
 
-static double h = 0.0457;
-#define GAS_STIFFNESS 3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
+//
+static double h = 0.01;// 0.035;//0.0457;
+
+//
+#define GAS_STIFFNESS 3.0//3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
+
+//Lower = less compression
 #define REST_DENSITY 998.29 //998.29 // kg/m^3 is rest density of water particle
+#define REST_DENSITY 100.29
+
 #define PARTICLE_MASS 0.02 // kg
+
+//Higher = gloopier
 #define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
+
+
 #define SURFACE_TENSION 0.0728 // N/m 
+
+
 #define SURFACE_THRESHOLD 0.01//7.065
+
 #define KERNEL_PARTICLES 20.0
+
 #define GRAVITY_ACCELERATION 9.80665
 
 #define WALL_K 10000.0 //10000.0 // wall spring constant
-#define WALL_DAMPING -0.9 // wall damping constant
+#define WALL_DAMPING 30//-0.9 // wall damping constant
 #define BOX_SIZE 0.4
 
 double W(Vec3d ij)
@@ -220,11 +240,11 @@ void collisionForce(Boid* boid, Vec3d f_collision)
 
 		if (d > 0.0)
 		{
-			boid->pos += d * wall.normal;
-			boid->velocity -= dot(boid->velocity, wall.normal) * 1.9 * wall.normal;
+			//boid->pos += d * wall.normal;
+			//boid->velocity -= dot(boid->velocity, wall.normal) * 1.9 * wall.normal;
 
-			//boid->accel += WALL_K * wall.normal * d;
-			//boid->accel += WALL_DAMPING * dot(boid->velocity, wall.normal) * wall.normal;
+			boid->accel += WALL_K * wall.normal * d;
+			boid->accel -= WALL_DAMPING * dot(boid->velocity, wall.normal) * wall.normal;
 		}
 	}
 }
@@ -254,7 +274,7 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 		for (auto& otherBoid : quadTree->queryRange(AABoxd(Point3d(boid->pos[0] - hh, boid->pos[1] - hh, 0), Point3d(boid->pos[1] + hh, boid->pos[1] + hh, 1))))
 		{
 			auto radSqr = lengthSquared((Vec3d)(boid->pos - otherBoid->pos));
-			if (radSqr < h * h)
+			if (radSqr <= h * h)
 				boid->density += Wpoly6(radSqr);
 		}
 
@@ -265,35 +285,35 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 
 	for (auto& boid : boids)
 	{
-		Vec3d f_pressure, f_viscosity, f_surface, f_gravity(0.0, boid->density*GRAVITY_ACCELERATION, 0.0), n, colorFieldNormal;
+		Vec3d f_pressure, f_viscosity, f_surface, f_gravity(0.0, GRAVITY_ACCELERATION * boid->density, 0.0), n, colorFieldNormal;
 		double colorFieldLaplacian = 0;
 
 		for (auto& otherBoid : quadTree->queryRange(AABoxd(Point3d(boid->pos[0] - hh, boid->pos[1] - hh, 0), Point3d(boid->pos[1] + hh, boid->pos[1] + hh, 1))))
 		{
-			Vec3d diffPos = boid->pos - otherBoid->pos;
-			double radiusSquared = lengthSquared(diffPos);
+			Vec3d diffPosition = boid->pos - otherBoid->pos;
+			double radiusSquared = lengthSquared(diffPosition);
 
 			if (radiusSquared <= h*h)
 			{
-				if (radiusSquared > 0.0)
+				Vec3d poly6Gradient, spikyGradient;
+
+				Wpoly6Gradient(diffPosition, radiusSquared, poly6Gradient);
+
+				WspikyGradient(diffPosition, radiusSquared, spikyGradient);
+
+				if (boid != otherBoid)
 				{
-					Vec3d gradient;
-					Wpoly6Gradient(diffPos, radiusSquared, gradient);
-
-					double a = boid->pressure + otherBoid->pressure;
-					double b = 2.0 * otherBoid->density;
-					f_pressure += a / b * gradient;
-
-					colorFieldNormal += gradient / otherBoid->density;
+					f_pressure += (boid->pressure / pow(boid->density, 2) + otherBoid->pressure / pow(otherBoid->density, 2)) * spikyGradient;
+					f_viscosity += (otherBoid->velocity - boid->velocity) * WviscosityLaplacian(radiusSquared) / otherBoid->density;
 				}
 
-				f_viscosity += (otherBoid->velocity - boid->velocity) * WviscosityLaplacian(radiusSquared) / otherBoid->density;
+				colorFieldNormal += poly6Gradient / otherBoid->density;
 
 				colorFieldLaplacian += Wpoly6Laplacian(radiusSquared) / otherBoid->density;
 			}
 		}
 
-		f_pressure *= -boid->mass;
+		f_pressure *= -boid->mass * boid->density;
 
 		f_viscosity *= VISCOSITY * boid->mass;
 
@@ -332,7 +352,7 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 	for (Boid* _b : boids)
 		quadTree->insert(_b);
 
-	_timePassedInSeconds *= 0.5;
+	_timePassedInSeconds *= 0.75;
 
 	if (_timePassedInSeconds >= 1)
 		return;
@@ -512,11 +532,18 @@ int main()
 #endif
 
 		//Draw boids
+		
+		
+		circleShape.setOutlineColor(sf::Color::White);
+#ifdef RENDER_REAL
+		circleShape.setFillColor(sf::Color::Blue);
+		circleShape.setOutlineThickness(0);
+		circleShape.setRadius(10.0f);
+#else
+		circleShape.setFillColor(sf::Color::Transparent);
 		circleShape.setOutlineThickness(1);
 		circleShape.setRadius(5.0f);
-		circleShape.setOutlineColor(sf::Color::White);
-		circleShape.setFillColor(sf::Color::Transparent);
-
+#endif
 		quadTreeMutexLock.lock();
 		for (Boid* boid : boids)
 		{
