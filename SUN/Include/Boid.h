@@ -9,18 +9,18 @@ struct Boid
 public:
 	double pressure;
 	double density;
-	double mass = 1.0;
+	double mass = 0.02;
 
-	Vec3f accel;
-	Vec3f normal;
-	Point3f pos;
-	Vec3f velocity;
-	Vec3f nextPos;
+	Vec3d accel;
+	Vec3d normal;
+	Point3d pos;
+	Vec3d velocity;
+	Vec3d nextPos;
 
-	Boid(Point3f pos)
+	Boid(Point3d pos)
 	{
 		this->pos = pos;
-		this->velocity = Vec3f(0, 0, 0);
+		this->velocity = Vec3d(0, 0, 0);
 		this->density = 0;
 		this->pressure = 0;
 		

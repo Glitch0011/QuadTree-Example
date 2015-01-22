@@ -7,7 +7,7 @@ using namespace gmtl;
 
 #include <Boid.h>
 
-#define DIVISION_FACTOR 2.0f
+#define DIVISION_FACTOR 2.0
 #define PER_QUAD_CAPACITY 32
 
 class Quadtree
@@ -16,14 +16,14 @@ class Quadtree
 	const int Capacity = PER_QUAD_CAPACITY;
 
 public:
-	AABoxf boundary;
+	AABoxd boundary;
 	Quadtree* parent;
 
 	std::vector<Boid*> points;
 	std::vector<Quadtree> children;
 	bool hasChildren = false;
 
-	Quadtree(AABoxf boundary, Quadtree* parent = nullptr)
+	Quadtree(AABoxd boundary, Quadtree* parent = nullptr)
 	{
 		this->boundary = boundary;
 		this->parent = parent;
@@ -65,17 +65,17 @@ public:
 		{
 			for (int y = 0; y < DIVISION_FACTOR; y++)
 			{
-				Point3f min(
+				Point3d min(
 					this->boundary.getMin() +
-						Vec3f(
+					Vec3d(
 							x * perNewPart[0],
 							y * perNewPart[1],
 							0));
 
 				Quadtree branch(
-					AABoxf(
+					AABoxd(
 						min,
-						min + Vec3f(
+						min + Vec3d(
 							perNewPart[0], 
 							perNewPart[1],
 							1)),
@@ -88,14 +88,14 @@ public:
 		this->hasChildren = true;
 	}
 
-	std::vector<Boid*> queryRange(AABoxf box)
+	std::vector<Boid*> queryRange(AABoxd box)
 	{
 		std::vector<Boid*> retPoints;
 		this->queryRange(&retPoints, box);
 		return retPoints;
 	}
 
-	void queryRange(std::vector<Boid*>* retPoints, AABoxf box)
+	void queryRange(std::vector<Boid*>* retPoints, AABoxd box)
 	{
 		//If we intersect with the box
 		if (intersect(this->boundary, box))
