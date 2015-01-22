@@ -18,7 +18,7 @@ using namespace gmtl;
 #ifdef DEBUG
 	#define BOID_COUNT 10
 #else
-	#define BOID_COUNT 2
+	#define BOID_COUNT 700
 #endif
 
 #define UPDATE_FRAMERATE 60
@@ -27,7 +27,7 @@ using namespace gmtl;
 #define OUTPUT_CONSOLE
 #define DRAW_QUADS
 #define DRAW_RECTS
-#define SECONDS_PER_MOUSE_UPDATE 0.1
+#define SECONDS_PER_MOUSE_UPDATE 0.01
 #define SECONDS_PER_REBUILD 0.1
 #define LINE_RANGE 30.0
 //#define RENDER_REAL
@@ -134,14 +134,14 @@ public:
 };
 
 //
-static double h = 0.01;// 0.035;//0.0457;
+static double h = 0.035;//0.0457;
 
 //
 #define GAS_STIFFNESS 3.0//3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
 
 //Lower = less compression
 #define REST_DENSITY 998.29 //998.29 // kg/m^3 is rest density of water particle
-#define REST_DENSITY 100.29
+
 
 #define PARTICLE_MASS 0.02 // kg
 
@@ -271,7 +271,7 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 			std::cout << "test";*/
 		
 
-		for (auto& otherBoid : quadTree->queryRange(AABoxd(Point3d(boid->pos[0] - hh, boid->pos[1] - hh, 0), Point3d(boid->pos[1] + hh, boid->pos[1] + hh, 1))))
+		for (auto& otherBoid : boids)
 		{
 			auto radSqr = lengthSquared((Vec3d)(boid->pos - otherBoid->pos));
 			if (radSqr <= h * h)
@@ -288,7 +288,7 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 		Vec3d f_pressure, f_viscosity, f_surface, f_gravity(0.0, GRAVITY_ACCELERATION * boid->density, 0.0), n, colorFieldNormal;
 		double colorFieldLaplacian = 0;
 
-		for (auto& otherBoid : quadTree->queryRange(AABoxd(Point3d(boid->pos[0] - hh, boid->pos[1] - hh, 0), Point3d(boid->pos[1] + hh, boid->pos[1] + hh, 1))))
+		for (auto& otherBoid : boids)
 		{
 			Vec3d diffPosition = boid->pos - otherBoid->pos;
 			double radiusSquared = lengthSquared(diffPosition);
