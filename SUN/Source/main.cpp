@@ -147,15 +147,13 @@ static double h = 0.035;//0.0457;
 //Higher = gloopier
 #define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
 
-
 #define SURFACE_TENSION 0.0728 // N/m 
-
 
 #define SURFACE_THRESHOLD 0.01//7.065
 
 #define KERNEL_PARTICLES 20.0
 
-#define GRAVITY_ACCELERATION 9.80665
+#define GRAVITY_ACCELERATION 2.0//9.80665
 
 #define WALL_K 10000.0 //10000.0 // wall spring constant
 #define WALL_DAMPING 30//-0.9 // wall damping constant
@@ -231,7 +229,8 @@ void collisionForce(Boid* boid, Vec3d f_collision)
 	_walls.push_back(WALL(Vec3f(0, 0, -1), Vec3f(0, 0, 0)));*/
 	_walls.push_back(WALL(Vec3d(1, 0, 0), Vec3d(-0.4, 0, 0)));     // left
 	_walls.push_back(WALL(Vec3d(-1, 0, 0), Vec3d(0.4, 0, 0)));     // right
-	_walls.push_back(WALL(Vec3d(0, -1, 0), Vec3d(0, 0.4, 0))); // bottom
+	_walls.push_back(WALL(Vec3d(0, -1, 0), Vec3d(0, 0.4, 0)));
+	_walls.push_back(WALL(Vec3d(0, 1, 0), Vec3d(0, -1.0, 0)));
 
 	for (auto& wall : _walls)
 	{
@@ -326,7 +325,7 @@ void updateAccel(std::vector<Boid*>& boids, double timePassedInSeconds, Quadtree
 
 static std::vector<double> timeAverage;
 static std::default_random_engine generator;
-static std::uniform_real_distribution<double> uniform_distribution(-0.2, 0.2);
+static std::uniform_real_distribution<double> uniform_distribution(0, 1);
 
 void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree* quadTree)
 {
@@ -357,7 +356,7 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 	if (timeAverage.size() > 50)
 		timeAverage.pop_back();
 
-	//timePassedInSeconds = 1.0 / 100.0;
+	timePassedInSeconds = 1.0 / 100.0;
 
 	updateAccel(boids, timePassedInSeconds, quadTree);
 
@@ -371,7 +370,10 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 
 		if (!intersect(quadTree->boundary, (Point3d)newPos) || !(newPos[0] < 0 || newPos[0] > 0 || newPos[0] == 0))
 		{
-			newPos = Vec3d(uniform_distribution(generator), uniform_distribution(generator), 1);
+			newPos = Vec3d(
+				(-0.2 + (uniform_distribution(generator) * 0.4)),
+				(-0.2 + (uniform_distribution(generator) * 0.4)),
+				1);
 			newVel = Vec3d(0, 0, 0);
 		}
 
@@ -395,10 +397,7 @@ int main()
 	for (auto x = 0; x < (BOID_COUNT); x++)
 	{
 		boids.push_back(
-			new Boid(Point3d(0, 0, 0) +
-			Point3d(
-			0 + ((double)x/100.0f),
-			0, 1)));
+			new Boid(Point3d(0, 0, 0) + Point3d(10, 10, 1)));
 	}
 
 	bool mouseDown = false;
