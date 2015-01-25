@@ -443,6 +443,8 @@ int main()
 			//Frame-rate control
 			auto timePassedInSeconds = updateLimiter.Start();
 
+			gravity = Vec3d(0, 0, 0);
+
 			//If the mouse is down, tell the boids to go to that position
 			if (mouseDown)
 			{
@@ -470,8 +472,13 @@ int main()
 					auto mousePos = sf::Mouse::getPosition(*window);
 					Vec2f diff = Vec2f(mousePos.x, mousePos.y) - (screenSize / 2.0f);
 					Vec3d v = Vec3d(diff[0], diff[1], 0); 
+
+					Vec3d b = Vec3d(screenSize[0], screenSize[1], 0.0) / 2.0;
+					auto l = length(b);
+
+					auto gravStrength = 1 - ((l - length(v)) / 500);
 					normalize(v);
-					gravity = v * GRAVITY_ACCELERATION;
+					gravity = v * GRAVITY_ACCELERATION * gravStrength;
 				}
 			}
 			//Rebuild the quad-tree every SECONDS_PER_REBUILD
