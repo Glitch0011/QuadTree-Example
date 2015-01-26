@@ -51,7 +51,7 @@ static double h = 0.035;//0.0457;
 #define PARTICLE_MASS 0.02 // kg
 
 //Higher = gloopier
-#define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
+#define VISCOSITY 3.5//150// 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
 
 #define SURFACE_TENSION 0.0728 // N/m 
 
