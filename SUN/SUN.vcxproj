@@ -94,6 +94,7 @@
   <ItemGroup>
     <ClInclude Include="Include\Boid.h" />
     <ClInclude Include="Include\CustomAllocator.h" />
+    <ClInclude Include="Include\FrameLimiter.h" />
     <ClInclude Include="Include\main.h" />
     <ClInclude Include="Include\Quadtree.h" />
     <ClInclude Include="Include\ScreenSize.h" />

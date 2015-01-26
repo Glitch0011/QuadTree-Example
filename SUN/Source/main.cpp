@@ -7,6 +7,7 @@
 #include <random>
 #include <chrono>
 #include <mutex>
+#include <Windows.h>
 
 #include <gmtl/gmtl.h>
 using namespace gmtl;
@@ -14,6 +15,8 @@ using namespace gmtl;
 #include <conio.h>
 
 #include <Boid.h>
+
+#include <FrameLimiter.h>
 
 #ifdef DEBUG
 	#define BOID_COUNT 10
@@ -36,8 +39,38 @@ using namespace gmtl;
 #define PI 3.14159265359
 #define UPDATE_BOIDS
 
+//
+static double h = 0.035;//0.0457;
+
+//
+#define GAS_STIFFNESS 3.0//3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
+
+//Lower = less compression
+#define REST_DENSITY 998.29 //998.29 // kg/m^3 is rest density of water particle
+
+#define PARTICLE_MASS 0.02 // kg
+
+//Higher = gloopier
+#define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
+
+#define SURFACE_TENSION 0.0728 // N/m 
+
+#define SURFACE_THRESHOLD 0.01//7.065
+
+#define KERNEL_PARTICLES 20.0
+
+#define GRAVITY_ACCELERATION 9.80665
+
+#define WALL_K 10000.0 //10000.0 // wall spring constant
+#define WALL_DAMPING 30//-0.9 // wall damping constant
+#define BOX_SIZE 0.4
+
+#define PADDING 0.1
+
+static Vec3d gravity = Vec3d(0, GRAVITY_ACCELERATION, 0);
+
 #ifdef RENDER_REAL
-	#undef DRAW_QUADS
+#undef DRAW_QUADS
 #endif
 
 static sf::RectangleShape shape;
@@ -76,94 +109,6 @@ void draw(sf::RenderWindow* window, Quadtree branch)
 			draw(window, child);
 	}
 }
-
-#include <Windows.h>
-
-class FrameLimiter
-{
-private:
-	std::chrono::system_clock::time_point last;
-	double desiredFrameRate = 0;
-	std::chrono::duration<double> timePerFrame;
-
-	unsigned int frameRate = 0;
-	double nextFrameRate = 1.0;
-
-	bool output = false;
-	
-public:
-	FrameLimiter(double _frameRate = 60.0, bool output = false)
-	{
-		this->desiredFrameRate = _frameRate;
-		timePerFrame = std::chrono::duration<double>(1.0 / desiredFrameRate);
-		this->output = output;
-	}
-
-	double Start()
-	{
-		auto timePassedInSeconds = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now() - last).count() * 1.0e-9;
-		last = std::chrono::system_clock::now();
-
-		if (nextFrameRate <= 0)
-		{
-			nextFrameRate = 1.0;
-
-#ifdef OUTPUT_CONSOLE
-			if (output)
-			std::cout << ("Framerate: " + std::to_string(frameRate) + "\r\n").c_str();
-#endif
-
-			frameRate = 0;
-		}
-		else
-		{
-			nextFrameRate -= timePassedInSeconds;
-			frameRate++;
-		}
-
-		return timePassedInSeconds;
-	}
-
-	void End()
-	{
-		std::chrono::duration<double> timePassed = std::chrono::system_clock::now() - last;
-		auto timeToSleep = std::chrono::duration_cast<std::chrono::nanoseconds>(this->timePerFrame - timePassed).count();
-
-		std::this_thread::sleep_for(std::chrono::nanoseconds(timeToSleep));
-	}
-};
-
-//
-static double h = 0.035;//0.0457;
-
-//
-#define GAS_STIFFNESS 3.0//3.0 //20.0 // 461.5  // Nm/kg is gas constant of water vapor
-
-//Lower = less compression
-#define REST_DENSITY 998.29 //998.29 // kg/m^3 is rest density of water particle
-
-#define PARTICLE_MASS 0.02 // kg
-
-//Higher = gloopier
-#define VISCOSITY 3.5 // 5.0 // 0.00089 // Ns/m^2 or Pa*s viscosity of water
-
-
-#define SURFACE_TENSION 0.0728 // N/m 
-
-
-#define SURFACE_THRESHOLD 0.01//7.065
-
-#define KERNEL_PARTICLES 20.0
-
-#define GRAVITY_ACCELERATION 9.80665
-
-#define WALL_K 10000.0 //10000.0 // wall spring constant
-#define WALL_DAMPING 30//-0.9 // wall damping constant
-#define BOX_SIZE 0.4
-
-#define PADDING 0.1
-
-static Vec3d gravity = Vec3d(0, GRAVITY_ACCELERATION, 0);
 
 double W(Vec3d ij)
 {
@@ -231,10 +176,8 @@ void collisionForce(Boid* boid, Vec3d f_collision)
 	};
 
 	std::vector<WALL> _walls;
-	/*_walls.push_back(WALL(Vec3f(0, 0, 1), Vec3f(0, 0, 0)));
-	_walls.push_back(WALL(Vec3f(0, 0, -1), Vec3f(0, 0, 0)));*/
-	_walls.push_back(WALL(Vec3d(1, 0, 0), Vec3d(-(boundarySize[0]), 0, 0)));    // left
-	_walls.push_back(WALL(Vec3d(-1, 0, 0), Vec3d((boundarySize[0]), 0, 0)));     // right
+	_walls.push_back(WALL(Vec3d(1, 0, 0), Vec3d(-(boundarySize[0]), 0, 0))); // left
+	_walls.push_back(WALL(Vec3d(-1, 0, 0), Vec3d((boundarySize[0]), 0, 0))); // right
 	_walls.push_back(WALL(Vec3d(0, -1, 0), Vec3d(0, (boundarySize[1]), 0))); // bottom
 	_walls.push_back(WALL(Vec3d(0, 1, 0), Vec3d(0, -(boundarySize[1]), 0))); // bottom
 
@@ -244,9 +187,6 @@ void collisionForce(Boid* boid, Vec3d f_collision)
 
 		if (d > 0.0)
 		{
-			//boid->pos += d * wall.normal;
-			//boid->velocity -= dot(boid->velocity, wall.normal) * 1.9 * wall.normal;
-
 			boid->accel += WALL_K * wall.normal * d;
 			boid->accel -= WALL_DAMPING * dot(boid->velocity, wall.normal) * wall.normal;
 		}
@@ -342,7 +282,7 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 	for (Boid* _b : boids)
 		quadTree->insert(_b);
 
-	_timePassedInSeconds *= 0.75;
+	_timePassedInSeconds *= 0.50;
 
 	if (_timePassedInSeconds >= 1)
 		return;
@@ -361,8 +301,6 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 	}
 	if (timeAverage.size() > 50)
 		timeAverage.pop_back();
-
-	//timePassedInSeconds = 1.0 / 100.0;
 
 	updateAccel(boids, timePassedInSeconds, quadTree);
 
@@ -393,7 +331,10 @@ int main()
 	//Create random generators
 	std::normal_distribution<double> distribution(5.0, 1.0);
 
-	Quadtree quadTree(AABoxd(Vec3d(quadPos[0] - boundarySize[0] - PADDING, quadPos[0] - boundarySize[0] - PADDING, 0), Vec3d(quadPos[0] + boundarySize[0] + PADDING, quadPos[1] + boundarySize[1] + PADDING, 1)));
+	Quadtree quadTree(
+		AABoxd(
+			Vec3d(quadPos[0] - boundarySize[0] - PADDING, quadPos[0] - boundarySize[0] - PADDING, 0),
+			Vec3d(quadPos[0] + boundarySize[0] + PADDING, quadPos[1] + boundarySize[1] + PADDING, 1)));
 
 	//Setup boids
 	std::vector<Boid*> boids;
@@ -443,7 +384,7 @@ int main()
 			//Frame-rate control
 			auto timePassedInSeconds = updateLimiter.Start();
 
-			gravity = Vec3d(0, 0, 0);
+			//gravity = Vec3d(0, 0, 0);
 
 			//If the mouse is down, tell the boids to go to that position
 			if (mouseDown)
@@ -560,6 +501,11 @@ int main()
 				sf::Vector2f(
 					(boid->pos[0] + 1.0) * (screenSize[0]/2.0),
 					(boid->pos[1] + 1.0) * (screenSize[1]/2.0)));
+
+			auto colour = std::max(std::min((boid->density / 2000.0), 1.0), 0.0) * 255.0;
+
+			circleShape.setOutlineColor(sf::Color(0, 0, colour));
+			circleShape.setFillColor(sf::Color(0, 0, colour));
 
 			auto targetBox = AABoxf(
 				Vec3f(boid->pos[0] - LINE_RANGE, boid->pos[1] - LINE_RANGE, 0),

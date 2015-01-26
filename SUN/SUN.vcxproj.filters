@@ -38,6 +38,9 @@
     <ClInclude Include="Include\ScreenSize.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\FrameLimiter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE" />
