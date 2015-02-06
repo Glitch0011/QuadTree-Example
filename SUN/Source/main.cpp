@@ -304,8 +304,6 @@ void updateBoids(std::vector<Boid*>& boids, float _timePassedInSeconds, Quadtree
 
 	updateAccel(boids, timePassedInSeconds, quadTree);
 
-	Vec3d gravity = Vec3d(0, 1, 0);
-
 	for (auto& boid : boids)
 	{
 		Vec3d newPos = boid->pos + (boid->velocity * timePassedInSeconds) + (boid->accel*timePassedInSeconds*timePassedInSeconds);
