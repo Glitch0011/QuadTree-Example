@@ -40,14 +40,14 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(ProjectDir)Include;$(SolutionDir)SFML-2.2/include/;$(SolutionDir)gmtl-0.6.1;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)SFML-2.2/lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)Include;$(SolutionDir)SFML-2.5.1/include/;$(SolutionDir)gmtl-0.6.1;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)SFML-2.5.1/lib;$(LibraryPath)</LibraryPath>
     <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)$(Configuration)_Immediate\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LibraryPath>$(SolutionDir)SFML-2.2/lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)Include;$(SolutionDir)SFML-2.2/include/;$(SolutionDir)gmtl-0.6.1;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)SFML-2.5.1/lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)Include;$(SolutionDir)SFML-2.5.1/include/;$(SolutionDir)gmtl-0.6.1;$(IncludePath)</IncludePath>
     <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)$(Configuration)_Immediate\</IntDir>
   </PropertyGroup>
@@ -63,7 +63,7 @@
       <AdditionalDependencies>sfml-graphics.lib;sfml-window.lib;sfml-system.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>XCOPY /Y "$(SolutionDir)SFML-2.2\bin\*.dll" "$(OutDir)"</Command>
+      <Command>XCOPY /Y "$(SolutionDir)SFML-2.5.1\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -85,7 +85,7 @@
       <AdditionalDependencies>sfml-graphics.lib;sfml-window.lib;sfml-system.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>XCOPY /Y "$(SolutionDir)SFML-2.2\bin\*.dll" "$(OutDir)"</Command>
+      <Command>XCOPY /Y "$(SolutionDir)SFML-2.5.1\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
