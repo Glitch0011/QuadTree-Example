@@ -30,3 +30,5 @@
 .vs
 SUN/Release
 SUN/Release*
+**/Debug
+**/Debug_Immediate
