@@ -16,20 +16,20 @@ using namespace gmtl;
 #ifdef DEBUG
 	#define BOID_COUNT 100
 #else
-	#define BOID_COUNT 1000
+	#define BOID_COUNT 600
 #endif
 
 #define UPDATE_FRAMERATE 10
 #define RENDER_FRAMERATE 30
 #define BOID_UPDATE_FRAMERATE 120
 //#define OUTPUT_CONSOLE
-//#define DRAW_QUADS
-//#define DRAW_RECTS
+#define DRAW_QUADS
+#define DRAW_RECTS
 #define SECONDS_PER_MOUSE_UPDATE 0.25
 #define SECONDS_PER_REBUILD 0.1
 #define LINE_RANGE 40.0
 #define DRAW_LINES
-//#define LINEAR_SEARCH
+// #define LINEAR_SEARCH
 #define PI 3.14159265359
 #define UPDATE_BOIDS
 
